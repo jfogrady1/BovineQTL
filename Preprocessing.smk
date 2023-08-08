@@ -2,6 +2,8 @@ import pandas as pd
 import os
 import subprocess
 
+# File to preprocess RNA-seq data and genotype data
+
 autosomes = [str(i) for i in range(1,30)] # bovine autosomes
 rule all:
     input:

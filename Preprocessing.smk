@@ -2,6 +2,7 @@ import pandas as pd
 import os
 import subprocess
 
+autosomes = [str(i) for i in range(1,30)] # bovine autosomes
 rule all:
     input:
         '/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/RNA-seq/Fastqc/multiqc_report.html',
@@ -17,7 +18,18 @@ rule all:
         "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/flip_check/ARS_liftOver_updated.map",
         "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/flip_check/Master_final.txt",
         "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/flip_check/SNP_Data_Flipped.vcf",
-        "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/flip_check/PLOT_AlleleFrequencies.pdf"
+        "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/flip_check/PLOT_AlleleFrequencies.pdf",
+        "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/CattleACDr2.variants.phased.filtered.lowMissingnessIDs.unrel.biallelic.GQ25.CR75.annotated.noMW.GQ25.CR75.IMPUTED.CLEAN.vcf.gz",
+        expand("/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/CattleACDr2_noMW_CHR{chromosome}.IMPUTED.vcf.gz", chromosome = autosomes),
+        expand("/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/CattleACDr2_noMW_CHR{chromosome}.IMPUTED2.m3vcf.gz", chromosome = autosomes),
+        expand("/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/SNP_Data_CHR{chromosome}.vcf.gz", chromosome = autosomes),
+        expand("/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/phased/SNP_Data_PHASED_CHR{chromosome}.vcf.gz", chromosome = autosomes),
+        expand("/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/imputed/SNP_Data_CHR{chromosome}.IMPUTED.RAW.dose.vcf.gz", chromosome = autosomes),
+        "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/imputed/ALL_imputation_summary_statistics_sorted.info",
+        "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/Plotting/imputation/R2_ER2.pdf",
+        "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/imputed/SNP_Data_ALL_CHR.IMPUTED.RAW.dose.vcf.gz",
+        "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/imputed/SNP_Data_ALL_CHR.Renamed.IMPUTED.RAW.dose.vcf.gz",
+        "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/imputed/SNP_Data_ALL_CHR.Renamed.IMPUTED.FILTERED.dose.vcf.gz"
 
 rule fastqc:
     input:
@@ -54,7 +66,6 @@ rule Alignment:
         interlog = '/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/RNA-seq/Alignment/{individual}_Log.progress.out',
         initiallog = '/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/RNA-seq/Alignment/{individual}_Log.out'
     threads: 20
-
     shell:
         '''
         STAR-2.7.1a  --genomeLoad LoadAndKeep --genomeDir {input.genome} --runThreadN {threads} \
@@ -263,16 +274,187 @@ rule flip_check:
         
         # use vcftools to calculate frequency
         vcftools --vcf {input.final_vcf_4_imputation} --freq \
-        --out /home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/flip_check/Reference_Allele_freq
+        --out /home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/flip_check/Reference_Allele_freq.frq
         
         # Calculate the allele frequencies
         vcftools --gzvcf /home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/flip_check/WGS_array_European_subsetted.vcf.gz \
-        --freq --out /home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/flip_check/European_WGS_Allele_freq
+        --freq --out /home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/flip_check/European_WGS_Allele_freq.frq
         
         # Identify spurious SNPs and plot allele frequencies
         Rscript {input.script} \
-        /home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/flip_check/European_WGS_Allele_freq \
+        /home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/flip_check/European_WGS_Allele_freq.frq \
         /home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/flip_check/Reference_Allele_freq.frq \
         {output.AF_gg} {output.AF_ss} {output.spurious_snps} {output.spurious_snps_pos}
         
+        '''
+
+# Final cleaning
+rule prepare_ref_target:
+    input:
+        target_data = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/flip_check/SNP_Data_Flipped.vcf",
+        spurious_snps = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/flip_check/Spurious_Flipped_SNPs.txt",
+        master_reference = multiext("/home/workspace/jogrady/eqtl_study/eqtl_nextflow/data/SNP_data/CattleACDr2.variants.phased.filtered.lowMissingnessIDs.unrel.biallelic.GQ25.CR75.annotated.noMW.GQ25.CR75.IMPUTED", ".vcf.gz",".vcf.gz.tbi")
+
+    params:
+        prefix = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/"
+    output:
+        cleaned_target = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/SNP_Data_Final.vcf.gz",
+        cleaned_reference = multiext("/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/CattleACDr2.variants.phased.filtered.lowMissingnessIDs.unrel.biallelic.GQ25.CR75.annotated.noMW.GQ25.CR75.IMPUTED.CLEAN", ".vcf.gz", ".vcf.gz.tbi")
+
+    
+    shell:
+        '''
+        # Remove spurious SNPs
+        vcftools --vcf {input.target_data} --exclude-positions {input.spurious_snps} --recode --recode-INFO-all --stdout | bgzip -c > {params.prefix}SNP_data_final.vcf.gz
+    
+        # Removing duplicate SNP - will not work for phasing if present
+        gunzip -c {params.prefix}SNP_data_final.vcf.gz | grep -v "Affx-45008270" > {params.prefix}SNP_Data_Final.vcf
+    
+        gzip {params.prefix}SNP_Data_Final.vcf
+    
+        # Removing spurious SNPs in WGS reference set
+        vcftools --gzvcf {input.master_reference[0]} --exclude-positions {input.spurious_snps} --recode --recode-INFO-all --stdout | bgzip -c > \
+        {params.prefix}CattleACDr2.variants.phased.filtered.lowMissingnessIDs.unrel.biallelic.GQ25.CR75.annotated.noMW.GQ25.CR75.IMPUTED.CLEAN.vcf.gz \
+        && tabix -p vcf {params.prefix}CattleACDr2.variants.phased.filtered.lowMissingnessIDs.unrel.biallelic.GQ25.CR75.annotated.noMW.GQ25.CR75.IMPUTED.CLEAN.vcf.gz
+        '''
+
+# Now onto the imputation
+
+# Note, WGS reference alread phased from Roslin
+rule split_ref_by_chr:
+    input:
+       cleaned_reference = multiext("/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/CattleACDr2.variants.phased.filtered.lowMissingnessIDs.unrel.biallelic.GQ25.CR75.annotated.noMW.GQ25.CR75.IMPUTED.CLEAN", ".vcf.gz", ".vcf.gz.tbi")
+    output:
+       imputation_chr = multiext("/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/CattleACDr2_noMW_CHR{chromosome}.IMPUTED", ".vcf.gz", ".vcf.gz.tbi"),
+    params:
+       chromosome = "{chromosome}"
+    shell:
+        '''
+        vcftools --gzvcf {input.cleaned_reference[0]} --chr {params.chromosome} --recode --recode-INFO-all --stdout | bgzip -c > {output.imputation_chr[0]} && tabix -p vcf {output.imputation_chr[0]}
+        '''
+
+rule m3vcfgen:
+    input:
+       minimac3 = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/bin/SNP_data/Minimac3",
+       imputation_chr = multiext("/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/CattleACDr2_noMW_CHR{chromosome}.IMPUTED", ".vcf.gz", ".vcf.gz.tbi")
+    output:
+       hap_files = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/CattleACDr2_noMW_CHR{chromosome}.IMPUTED2.m3vcf.gz"
+    
+    threads: 10
+    params:
+       chromosome = "{chromosome}",
+       prefix = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/CattleACDr2_noMW_CHR{chromosome}.IMPUTED2"
+    shell:
+        '''
+        {input.minimac3} --refHaps {input.imputation_chr} --MyChromosome {params.chromosome} --cpus [8]  --processReference --prefix {params.prefix}
+        '''
+
+rule split_target_by_chr:
+    input:
+        cleaned_target = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/SNP_Data_Final.vcf.gz"
+    output:
+        target_chromosome = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/SNP_Data_CHR{chromosome}.vcf.gz",
+    params:
+        chromosome = "{chromosome}",
+    shell:
+        '''
+        vcftools --gzvcf {input.cleaned_target} --chr {params.chromosome} --recode --recode-INFO-all --stdout | bgzip -c > /home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/SNP_Data_CHR{params.chromosome}.vcf.gz
+        '''
+
+rule phasing_target:
+    input:
+        cleaned_target_chr = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/SNP_Data_CHR{chromosome}.vcf.gz",
+        beagle = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/bin/SNP_data/beagle.05May22.33a.jar"
+    output:
+        phased_target_chr = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/phased/SNP_Data_PHASED_CHR{chromosome}.vcf.gz"
+    threads: 10
+
+    params:
+        chr = "{chromosome}"
+    shell:
+        """
+        java -Xmx110g -jar {input.beagle} gt={input.cleaned_target_chr} impute=false ap=true gp=true nthreads={threads} \
+        out=/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/phased/SNP_Data_PHASED_CHR{params.chr}
+        """
+
+rule imputation:
+    input:
+        minimac4 = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/bin/SNP_data/minimac4",
+        hap_files = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/CattleACDr2_noMW_CHR{chromosome}.IMPUTED2.m3vcf.gz",
+        phased_target_chr = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/phased/SNP_Data_PHASED_CHR{chromosome}.vcf.gz"
+    output:
+        imputed = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/imputed/SNP_Data_CHR{chromosome}.IMPUTED.RAW.dose.vcf.gz"
+    threads: 10
+
+    params:
+       chr = "{chromosome}",
+       prefix = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/imputed/SNP_Data_CHR{chromosome}.IMPUTED.RAW"
+    shell:
+        '''
+        {input.minimac4} --refHaps {input.hap_files} --myChromosome {params.chr} --haps {input.phased_target_chr} --prefix {params.prefix}
+        '''
+
+# Imputation performance
+rule merge_info_files:
+    input:
+        info = expand("/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/imputed/SNP_Data_CHR{chromosome}.IMPUTED.RAW.info", chromosome = autosomes)
+    output:
+        all_info = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/imputed/ALL_imputation_summary_statistics.info",
+        all_sorted = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/imputed/ALL_imputation_summary_statistics_sorted.info"
+
+    shell:
+        '''
+        cat {input.info} >> {output.all_info}
+        sort -n -k1 {output.all_info} > {output.all_sorted}
+        '''
+
+rule imputation_performance:
+    input: 
+        all_sorted = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/imputed/ALL_imputation_summary_statistics_sorted.info",
+        script = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/bin/SNP_data/Imputation_Performance.R"
+    output:
+        ER2 = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/Plotting/imputation/ER2_values.pdf",
+        R2_typed = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/Plotting/imputation/R2_typed_variants.pdf",
+        ALL_R2 = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/Plotting/imputation/ALLR2_values.pdf",
+        R2_ALL_ER2 = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/Plotting/imputation/R2_ER2.pdf"
+
+    shell:
+        '''
+        Rscript {input.script} {input.all_sorted} {output.ER2} {output.R2_typed} {output.ALL_R2} {output.R2_ALL_ER2}
+        '''
+
+rule merge_imputation:
+    input:
+        imputed = expand("/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/imputed/SNP_Data_CHR{chromosome}.IMPUTED.RAW.dose.vcf.gz", chromosome = autosomes)
+
+    output:
+        merged = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/imputed/SNP_Data_ALL_CHR.IMPUTED.RAW.dose.vcf.gz",
+
+    shell:
+        '''
+        bcftools concat -Oz -o {output.merged} {input.imputed} && tabix -p vcf {output.merged}
+        '''
+
+rule edit_sample_names:
+    input:
+        merged = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/imputed/SNP_Data_ALL_CHR.IMPUTED.RAW.dose.vcf.gz",
+        names = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/data/SNP_data/Rename.txt"
+    
+    output:
+        renamed = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/imputed/SNP_Data_ALL_CHR.Renamed.IMPUTED.RAW.dose.vcf.gz",
+
+    shell:
+        '''
+        bcftools reheader -s {input.names} {input.merged} -o {output.renamed}
+        '''
+    
+rule filter_vcf:
+    input:
+        renamed = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/imputed/SNP_Data_ALL_CHR.Renamed.IMPUTED.RAW.dose.vcf.gz"
+
+    output:
+        filtered_imputed = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/imputed/SNP_Data_ALL_CHR.Renamed.IMPUTED.FILTERED.dose.vcf.gz"
+    shell:
+        '''
+        bcftools +fill-tags {input.renamed} -Oz | bcftools view -q 0.05:minor -Oz | bcftools view -e 'HWE < 0.000001 || R2 < 0.6 || F_MISSING > 0.05 || N_MISSING > 0.05' -Oz -o {output.filtered_imputed} && tabix -p vcf {output.filtered_imputed}
         '''

@@ -31,7 +31,8 @@ rule all:
         "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/Plotting/imputation/R2_ER2.pdf",
         "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/imputed/SNP_Data_ALL_CHR.IMPUTED.RAW.dose.vcf.gz",
         "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/imputed/SNP_Data_ALL_CHR.Renamed.IMPUTED.RAW.dose.vcf.gz",
-        "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/imputed/SNP_Data_ALL_CHR.Renamed.IMPUTED.FILTERED.dose.vcf.gz"
+        "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/imputed/SNP_Data_ALL_CHR.Renamed.IMPUTED.FILTERED.dose.vcf.gz",
+        directory("/home/workspace/jogrady/eqtl_study/eqtl_nextflow/data/RNA_seq/star-genome/")
 
 rule fastqc:
     input:
@@ -40,7 +41,7 @@ rule fastqc:
         reads = expand('/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/RNA-seq/Fastqc/{{individual}}_{N}_fastqc.zip', N = (1,2)),
         html = expand('/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/RNA-seq/Fastqc/{{individual}}_{N}_fastqc.html', N = (1,2))
     threads:
-        12
+        40
     resources:
         mem_mb = 4000
     shell:
@@ -55,10 +56,27 @@ rule multiqc:
         """
         multiqc {input} -f -o /home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/RNA-seq/Fastqc/
         """
-
+rule build_reference:
+    input:
+        fa="/home/workspace/jogrady/eqtl_study/eqtl_nextflow/data/RNA_seq/Bos_taurus.ARS-UCD1.2.dna.toplevel.fa",
+        gtf="/home/workspace/jogrady/eqtl_study/eqtl_nextflow/data/RNA_seq/Bos_taurus.ARS-UCD1.2.110.gtf" 
+    output:
+        STAR_dir = directory("/home/workspace/jogrady/eqtl_study/eqtl_nextflow/data/RNA_seq/star-genome/")  # Please provide the output files names from this step.
+    threads: 20
+    shell:
+        '''
+        mkdir /home/workspace/jogrady/eqtl_study/eqtl_nextflow/data/RNA_seq/star-genome/ # STAR cannot make directory
+        STAR-2.7.1a --runThreadN {threads} \
+        --runMode genomeGenerate \
+        --genomeDir /home/workspace/jogrady/eqtl_study/eqtl_nextflow/data/RNA_seq/star-genome/ \
+        --genomeFastaFiles {input.fa} \
+        --sjdbGTFfile {input.gtf}
+        --sjdbOverhang 149
+        --outFileNamePrefix /home/workspace/jogrady/eqtl_study/eqtl_nextflow/data/RNA_seq/star-genome/
+        ''' 
 rule Alignment:
     input:
-        genome = config["star_index"],
+        genome = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/data/RNA_seq/star-genome/",
         reads = lambda wildcards: expand(f'/home/workspace/jogrady/eqtl_study/eqtl_nextflow/data/RNA_seq/RAW/{config["samples"][wildcards.individual]}_{{N}}.fq.gz', N=(1,2)),
     params:
         prefix = lambda wildcards: f'{config["samples"][wildcards.individual]}'
@@ -67,7 +85,7 @@ rule Alignment:
         finallog = '/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/RNA-seq/Alignment/{individual}_Log.final.out',
         interlog = '/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/RNA-seq/Alignment/{individual}_Log.progress.out',
         initiallog = '/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/RNA-seq/Alignment/{individual}_Log.out'
-    threads: 20
+    threads: 30
     shell:
         '''
         STAR-2.7.1a  --genomeLoad LoadAndKeep --genomeDir {input.genome} --runThreadN {threads} \
@@ -82,7 +100,7 @@ rule featureCounts:
         annotation="/home/workspace/jogrady/eqtl_study/eqtl_nextflow/data/RNA_seq/GCF_002263795.1_ARS-UCD1.2_genomic.gff"
     output:
         count_matrix = '/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/RNA-seq/Quantification/gene_counts.txt'
-    threads: 37
+    threads: 40
     shell:
         '''
         featureCounts -a {input.annotation} -o {output.count_matrix} {input.bam} -B -p -C -R BAM -T {threads} -s 0 -t gene -g Dbxref
@@ -106,7 +124,7 @@ rule cleanup:
         python3 {input.final_script} {output.count_matrix_2} {input.temporary} {output.cleaned}
         '''
 
-rule TPM normalisation:
+rule TPM  Tnormalisation:
     input:
         script = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/bin/RNA_seq/TPM_normalisation.R",
         annotation = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/data/RNA_seq/Bovine_annotation_MF2.csv",
@@ -342,13 +360,13 @@ rule m3vcfgen:
     output:
        hap_files = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/CattleACDr2_noMW_CHR{chromosome}.IMPUTED2.m3vcf.gz"
     
-    threads: 10
+    threads: 40
     params:
        chromosome = "{chromosome}",
        prefix = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/CattleACDr2_noMW_CHR{chromosome}.IMPUTED2"
     shell:
         '''
-        {input.minimac3} --refHaps {input.imputation_chr} --MyChromosome {params.chromosome} --cpus [8]  --processReference --prefix {params.prefix}
+        {input.minimac3} --refHaps {input.imputation_chr} --MyChromosome {params.chromosome} --cpus [40]  --processReference --prefix {params.prefix}
         '''
 
 rule split_target_by_chr:
@@ -369,7 +387,7 @@ rule phasing_target:
         beagle = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/bin/SNP_data/beagle.05May22.33a.jar"
     output:
         phased_target_chr = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/phased/SNP_Data_PHASED_CHR{chromosome}.vcf.gz"
-    threads: 10
+    threads: 40
 
     params:
         chr = "{chromosome}"
@@ -386,7 +404,7 @@ rule imputation:
         phased_target_chr = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/phased/SNP_Data_PHASED_CHR{chromosome}.vcf.gz"
     output:
         imputed = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/imputed/SNP_Data_CHR{chromosome}.IMPUTED.RAW.dose.vcf.gz"
-    threads: 10
+    threads: 40
 
     params:
        chr = "{chromosome}",

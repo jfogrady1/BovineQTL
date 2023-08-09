@@ -70,9 +70,8 @@ rule build_reference:
         --runMode genomeGenerate \
         --genomeDir /home/workspace/jogrady/eqtl_study/eqtl_nextflow/data/RNA_seq/star-genome/ \
         --genomeFastaFiles {input.fa} \
-        --sjdbGTFfile {input.gtf}
+        --sjdbGTFfile {input.gtf} \
         --sjdbOverhang 149
-        --outFileNamePrefix /home/workspace/jogrady/eqtl_study/eqtl_nextflow/data/RNA_seq/star-genome/
         ''' 
 rule Alignment:
     input:

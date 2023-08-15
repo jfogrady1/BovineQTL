@@ -84,7 +84,7 @@ rule Alignment:
         finallog = '/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/RNA-seq/Alignment/{individual}_Log.final.out',
         interlog = '/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/RNA-seq/Alignment/{individual}_Log.progress.out',
         initiallog = '/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/RNA-seq/Alignment/{individual}_Log.out'
-    threads: 30
+    threads: 40
     shell:
         '''
         STAR-2.7.1a  --genomeLoad LoadAndKeep --genomeDir {input.genome} --runThreadN {threads} \
@@ -96,13 +96,14 @@ rule Alignment:
 rule featureCounts:
     input:
         bam = expand('/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/RNA-seq/Alignment/{sample}_Aligned.sortedByCoord.out.bam', sample = config["samples"]),
-        annotation="/home/workspace/jogrady/eqtl_study/eqtl_nextflow/data/RNA_seq/GCF_002263795.1_ARS-UCD1.2_genomic.gff"
+        annotation="/home/workspace/jogrady/eqtl_study/eqtl_nextflow/data/RNA_seq/Bos_taurus.ARS-UCD1.2.110.gtf"
     output:
         count_matrix = '/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/RNA-seq/Quantification/gene_counts.txt'
     threads: 40
     shell:
         '''
-        featureCounts -a {input.annotation} -o {output.count_matrix} {input.bam} -B -p -C -R BAM -T {threads} -s 0 -t gene -g Dbxref
+        # use new version of feature counts
+        /home/workspace/jogrady/eqtl_study/eqtl_nextflow/bin/RNA_seq/subread-2.0.6-Linux-x86_64/bin/featureCounts -a {input.annotation} -o {output.count_matrix} {input.bam} -B -p -C -R BAM -T {threads} -s 0 -t gene -g gene_id
         '''
 
 rule cleanup:
@@ -114,19 +115,22 @@ rule cleanup:
     output:
         count_matrix = '/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/RNA-seq/Quantification/gene_counts2.txt',
         count_matrix_2 = '/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/RNA-seq/Quantification/gene_counts_clean.txt',
-        cleaned = '/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/RNA-seq/Quantification/count_matrix_clean.txt'
+        cleaned = '/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/RNA-seq/Quantification/count_matrix_clean.txt',
+        temporary_1 = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/RNA-seq/Quantification/gene_counts_copy.txt"
     shell:
         '''
-        tail -n+2 {input.count_matrix_in} > {output.count_matrix}
+        cat {input.count_matrix_in} > {output.temporary_1} 
+        tail -n+2 {output.temporary_1} > {output.count_matrix}
         cut -f 1,7-130 {output.count_matrix} > {output.count_matrix_2} # number of samples, get rid of fields we do not want
-
-        python3 {input.final_script} {output.count_matrix_2} {input.temporary} {output.cleaned}
+        sed -i 's#/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/RNA-seq/Alignment/##g' {output.count_matrix_2}
+        sed -i 's/'"_Aligned\.sortedByCoord\.out\.bam"'//g' {output.count_matrix_2} 
+        cat {output.count_matrix_2} > {output.cleaned} 
         '''
 
-rule TPM  Tnormalisation:
+rule TPM_normalisation:
     input:
         script = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/bin/RNA_seq/TPM_normalisation.R",
-        annotation = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/data/RNA_seq/Bovine_annotation_MF2.csv",
+        annotation = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/data/RNA_seq/Bos_taurus.ARS-UCD1.2.110.gtf",
         count_matrix_in = '/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/RNA-seq/Quantification/count_matrix_clean.txt',
     output:
         count_matrix_all = '/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/RNA-seq/Quantification/ALL_matrix_clean.txt',

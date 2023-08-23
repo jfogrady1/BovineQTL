@@ -19,6 +19,7 @@ library(viridis)
 library("RColorBrewer")
 # Set the proper directory where the files are located
 
+args = commandArgs(trailingOnly = T)
 ##############################################################################################################################################################
 ##################################################### 2. Sorting input data into the correct format ##########################################################
 ##############################################################################################################################################################
@@ -28,8 +29,8 @@ library("RColorBrewer")
   # 1. Count matrix, 
   # 2. Metadata file  for input into the DESeq2 object (Generated below)
 
-counts <- as.matrix(read.table("~/eqtl_study/eqtl_nextflow/results/RNA-seq/Quantification/count_matrix_clean.txt", skip = 0, header = T, sep="\t",row.names=1)) # matrix file
-coldata <- as.data.frame(read.table("~/eqtl_study/eqtl_nextflow/data/RNA_seq/covariate_RNA_seq.txt", sep = '', skip = 0, header = T, row.names=1)) # metadata file
+counts <- as.matrix(read.table(args[1], skip = 0, header = T, sep="\t",row.names=1)) # matrix file
+coldata <- as.data.frame(read.table(args[2], sep = '', skip = 0, header = T, row.names=1)) # metadata file
 
 # Specify the count data as a matrix
 # Specify the metadata file as a dataframe - annoying but that is how it is
@@ -41,7 +42,7 @@ res_no_sva <- function(counts_in, coldata_in) {
 
 
     # Read in the eigen vector data from plink
-    genotype_PCs <- read.table("/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/ADMIXTURE/SNP_Pruned.eigenvec")
+    genotype_PCs <- read.table(args[3])
     genotype_PCs <- genotype_PCs %>% select(-1)
     genotype_PCs$V2 <- gsub("_.*", "", genotype_PCs$V2)
     rownames(genotype_PCs) <- genotype_PCs$V2
@@ -65,7 +66,7 @@ res_no_sva <- function(counts_in, coldata_in) {
 
 
     # Bring in Admixture analysis for PCA
-    file <- "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/ADMIXTURE/SNP_Pruned.2.Q"
+    file <-args[4]
 
 
     cat <- c(rep("Control", 63), rep("Infected", 60)) %>% as.data.frame()
@@ -330,19 +331,19 @@ result_normal$hypergeom_kirsten <- p_value
 # First plots
 
 result_normal$volcano
-ggsave("/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/RNA-seq/DESEQ2/Volcano_plot.pdf", width = 12, height = 12, dpi = 600)
+ggsave(args[5], width = 12, height = 12, dpi = 600)
 result_normal$my_gprofiler
-ggsave("/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/RNA-seq/DESEQ2/Gprofiler_enrichment.pdf", width = 12, height = 12, dpi = 600)
+ggsave(args[6], width = 12, height = 12, dpi = 600)
 result_normal$pca
-ggsave("/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/RNA-seq/DESEQ2/PCA_Transcriptomic_Admixture.pdf", width = 12, height = 12, dpi = 600)
+ggsave(args[7], width = 12, height = 12, dpi = 600)
 
 # DE results
-write.table(result_normal$signif_results, file = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/RNA-seq/DESEQ2/ALL_results.txt", sep = "\t", row.names = T, col.names = T, quote = F)
-write.table(result_normal$all_results, file = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/RNA-seq/DESEQ2/Significant_results.txt", sep = "\t", row.names = T, col.names = T, quote = F)
+write.table(result_normal$signif_results, file = args[8] sep = "\t", row.names = T, col.names = T, quote = F)
+write.table(result_normal$all_results, file = args[9], sep = "\t", row.names = T, col.names = T, quote = F)
 
 gem <- result_normal$gprofiler_results[,c("query", "term_id", "query_size", "intersection_size", "term_name", "p_value", "intersection")]
 colnames(gem)[6] <- "FDR"
 
-write.table(gem, file = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/RNA-seq/DESEQ2/Gprofiler_results.txt",sep = "\t", row.names = T, col.names = T, quote = F)
+write.table(gem, file = args[10],sep = "\t", row.names = T, col.names = T, quote = F)
 
-write.table(p_value, file = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/RNA-seq/DESEQ2/Kirsten_stats.txt", sep = "\t", row.names = T, col.names = F, quote = F)
+write.table(p_value, file = args[11], sep = "\t", row.names = T, col.names = F, quote = F)

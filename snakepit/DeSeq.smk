@@ -5,7 +5,7 @@ rule all:
 rule differential_expression:
     input:
         counts = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/RNA-seq/Quantification/count_matrix_clean.txt",
-        coldata = "/home/workspace/jogrady/data/eqtl_study/eqtl_nextflow/RNA_seq/covariate_RNA_seq.txt",
+        coldata = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/data/RNA_seq/covariate_RNA_seq.txt",
         pca_geno = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/ADMIXTURE/SNP_Pruned.eigenvec",
         admixture = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/ADMIXTURE/SNP_Pruned.2.Q",
         script = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/bin/RNA_seq/Differential_Expression.R"
@@ -20,6 +20,6 @@ rule differential_expression:
 
     shell:
         '''
-        Rscript {input.script} {input.counts} {input.coldata} {input.admixture} {output.Volcano} {output.Gprofiler} {output.PCA} \
+        Rscript {input.script} {input.counts} {input.coldata} {input.pca_geno} {input.admixture} {output.Volcano} {output.Gprofiler} {output.PCA} \
         {output.RAW_results} {output.Signif_results} {output.Gprofiler_results} {output.Kirsten_result}
         '''

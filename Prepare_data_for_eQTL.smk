@@ -18,7 +18,9 @@ rule all:
         expand("/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/results/{group}.cis_independent_qtl.txt.gz", group = config["groups"]),
         "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/results/plotting/cis_eGene_upset.pdf",
         "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/data/EQTL/Gtex_thresholds_determined.txt",
-        "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/results/plotting/cis_replication_correlation.pdf"
+        "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/results/plotting/cis_replication_correlation.pdf",
+        "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/results/ALL.cis_qtl_pairs.ALL.txt.gz",
+        "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/results/numbers_stats_cis.txt"
 
 
 rule split_groups:
@@ -125,7 +127,7 @@ rule qtl_mapping_permute:
 
         python3 -m tensorqtl {params.plink_prefix_path} {input.bed_4_tensor[0]} ${{prefix}} \
         --mode cis \
-        --window 100000 \
+        --window 1000000 \
         --seed 1856 \
         --permutations 10000 \
         --covariates {input.covariates_file} \
@@ -162,7 +164,7 @@ rule nominal_mappinng:
         prefix="/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/results/{params.group}"
         python3 -m tensorqtl {params.plink_prefix_path} {input.expression_bed[0]} ${{prefix}} \
         --covariates {input.covariates_file} \
-        --window 100000 \
+        --window 1000000 \
         --mode cis_nominal
         '''
 
@@ -240,4 +242,33 @@ rule cis_eQTL_replication:
     shell:
         '''
         Rscript {input.script} {input.perm} {input.gtex_nominal} {input.gtex_corrected} {output.pioest} {output.correlation}
+        '''
+rule merged_nominal:
+    input:
+        ALL_nominal = expand("/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/results/ALL.cis_qtl_pairs.{autosome}.txt.gz", autosome = autosomes),
+        CONTROL_nominal = expand("/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/results/CONTROL.cis_qtl_pairs.{autosome}.txt.gz", autosome = autosomes),
+        INFECTED_nominal = expand("/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/results/INFECTED.cis_qtl_pairs.{autosome}.txt.gz", autosome = autosomes)
+
+    output:
+        ALL_nominal_merged = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/results/ALL.cis_qtl_pairs.ALL.txt.gz",
+        CONTROL_nominal_merged = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/results/CONTROL.cis_qtl_pairs.ALL.txt.gz",
+        INFECTED_nominal_merged = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/results/INFECTED.cis_qtl_pairs.ALL.txt.gz"
+
+    shell:
+        '''
+        cat {input.ALL_nominal} > {output.ALL_nominal_merged}
+        cat {input.CONTROL_nominal} > {output.CONTROL_nominal_merged}
+        cat {input.INFECTED_nominal} > {output.INFECTED_nominal_merged}
+        '''
+
+rule number_eQTLs:
+    input:
+        permute = expand("/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/results/{group}.cis_qtl_fdr0.05.txt", group = config["groups"]),
+        nominal = expand("/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/results/{group}.cis_qtl_pairs.ALL.txt.gz", group = config["groups"]),
+        script = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/bin/EQTL/cis-eQTL_numbers.R"
+    output:
+        stats = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/results/numbers_stats_cis.txt"
+    shell:
+        '''
+        Rscript {input.script} {input.permute} {input.nominal} {output.stats}
         '''

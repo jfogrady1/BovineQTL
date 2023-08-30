@@ -32,7 +32,9 @@ rule all:
         "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/imputed/SNP_Data_ALL_CHR.IMPUTED.RAW.dose.vcf.gz",
         "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/imputed/SNP_Data_ALL_CHR.Renamed.IMPUTED.RAW.dose.vcf.gz",
         "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/imputation/imputed/SNP_Data_ALL_CHR.Renamed.IMPUTED.FILTERED.dose.vcf.gz",
-        directory("/home/workspace/jogrady/eqtl_study/eqtl_nextflow/data/RNA_seq/star-genome/")
+        directory("/home/workspace/jogrady/eqtl_study/eqtl_nextflow/data/RNA_seq/star-genome/"),
+        "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/RNA-seq/Alignment/density_raw_counts.pdf",
+        "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/ADMIXTURE/UMD_Genotype_pca.pdf"
 
 rule fastqc:
     input:
@@ -188,12 +190,18 @@ rule admixture_plot:
 rule pca_plot:
     input:
        filtered = multiext("/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/ADMIXTURE/filtered_SNP_data", ".bed", ".bim", ".fam"),
-       pruned = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/ADMIXTURE/pruned_snpset.prune.in"
+       pruned = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/ADMIXTURE/pruned_snpset.prune.in",
+       admix = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/ADMIXTURE/SNP_Pruned.2.Q",
+       breed = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/data/EQTL/Sample_database_2022_master.xlsx",
+       script = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/bin/SNP_data/Genotype_PCA_plot.R",
     output:
-       pdf = multiext("/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/ADMIXTURE/SNP_Pruned", ".eigenvec", ".eigenval")
+       pdf = multiext("/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/ADMIXTURE/SNP_Pruned", ".eigenvec", ".eigenval"),
+       pve = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/ADMIXTURE/UMD_Genotype_pca_pve.pdf",
+       pca = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/ADMIXTURE/UMD_Genotype_pca.pdf"
     shell:
         '''
         plink --cow --bfile /home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/ADMIXTURE/filtered_SNP_data --double-id --allow-extra-chr --extract {input.pruned} --pca --out /home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/ADMIXTURE/SNP_Pruned 
+        Rscript {input.script} {output.pdf[0]} {output.pdf[1]} {output.pve} {input.breed} {input.admix} {output.pca}
         '''
 
 rule liftover:
@@ -286,7 +294,7 @@ rule flip_check:
         script = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/bin/SNP_data/PLOT_strand_flipping.R"
     output:
         AF_gg = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/flip_check/PLOT_AlleleFrequencies.pdf",
-        AF_ss = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/flip_check/Smooth_scatter.png",
+        allele_frequencies = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/flip_check/RAW_AF_Comparsion_Values.txt",
         spurious_snps = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/flip_check/Spurious_Flipped_SNPs.txt",
         spurious_snps_pos = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/flip_check/Spurious_SNPS_to_remove_positions.txt"
     shell:
@@ -307,7 +315,7 @@ rule flip_check:
         Rscript {input.script} \
         /home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/flip_check/European_WGS_Allele_freq.frq \
         /home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/SNP_data/flip_check/Reference_Allele_freq.frq \
-        {output.AF_gg} {output.AF_ss} {output.spurious_snps} {output.spurious_snps_pos}
+        {output.allele_frequencies} {output.AF_gg} {output.spurious_snps} {output.spurious_snps_pos}
         
         '''
 
@@ -480,4 +488,16 @@ rule filter_vcf:
     shell:
         '''
         bcftools +fill-tags {input.renamed} -Oz | bcftools view -q 0.05:minor -Oz | bcftools view -e 'HWE < 0.000001 || R2 < 0.6 || F_MISSING > 0.05 || N_MISSING > 0.05' -Oz -o {output.filtered_imputed} && tabix -p vcf {output.filtered_imputed}
+        '''
+
+rule RNA_quality_check:
+    input:
+        counts = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/RNA-seq/Quantification/count_matrix_clean.txt",
+        script = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/bin/RNA_seq/RNA_quality_check.R"
+    output:
+        density = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/RNA-seq/Alignment/density_raw_counts.pdf"
+
+    shell:
+        '''
+        Rscript {input.script} {input.counts} {output.density}
         '''

@@ -70,8 +70,20 @@ res_no_sva <- function(counts_in, coldata_in) {
 
 
     cat <- c(rep("Control", 63), rep("Infected", 60)) %>% as.data.frame()
-    rows <- c(paste0(rep("C0"),as.character(c("01","02","03","04","05","06","07","08","09",10:63))))
-    rows <- c(rows, paste0(rep("T0"),as.character(c("01","02","03","04","05","06","07","08","09",10:60))))
+    rows <- c(
+  "C001", "C002", "C003", "C004", "C005", "C006", "C007", "C008", "C009", "C010",
+  "C011", "C012", "C013", "C014", "C015", "C016", "C017", "C018", "C019", "C020",
+  "C021", "C022", "C023", "C024", "C025", "C026", "C027", "C028", "C029", "C030",
+  "C031", "C033", "C034", "C035", "C036", "C037", "C038", "C039", "C040", "C041",
+  "C042", "C043", "C044", "C045", "C046", "C047", "C048", "C049", "C050", "C051",
+  "C052", "C053", "C054", "C055", "C056", "C057", "C058", "C059", "C060", "C061",
+  "C062", "C063", "C064", "T001", "T002", "T003", "T004", "T005", "T006", "T007",
+  "T008", "T009", "T010", "T011", "T013", "T014", "T015", "T016", "T017", "T018",
+  "T019", "T020", "T022", "T023", "T024", "T026", "T028", "T029", "T030", "T031",
+  "T032", "T033", "T034", "T035", "T036", "T037", "T038", "T039", "T040", "T041",
+  "T042", "T043", "T044", "T045", "T046", "T047", "T048", "T049", "T050", "T051",
+  "T052", "T053", "T054", "T055", "T056", "T057", "T058", "T059", "T060", "T061",
+  "T062", "T063", "T064")
     rows <- as.data.frame(rows)
     
 
@@ -80,7 +92,7 @@ res_no_sva <- function(counts_in, coldata_in) {
     attributes(alist[[1]])
     rownames(alist[[1]]) <- rows$rows
     rownames(alist$SNP_Pruned.2.Q) <- rows$rows
-    alist$SNP_Pruned.2.Q <- alist$SNP_Pruned.2.Q %>%  mutate(ADMIX_bin = cut((Cluster1 * 100), right = F, breaks=c(0.000,0.001,20, 40, 60, 80, 100), 
+    alist$SNP_Pruned.2.Q <- alist$SNP_Pruned.2.Q %>%  mutate(ADMIX_bin = cut((Cluster1 * 100), right = F, breaks=c(0.000,1,20, 40, 60, 80, 100), 
     labels = c("0", "1-20", "20-40", "40-60", "60-80", "80-100"))) %>% select(ADMIX_bin)
 
     ddsvsd <- vst(ddsMat)
@@ -89,8 +101,9 @@ res_no_sva <- function(counts_in, coldata_in) {
     pcaData <- cbind(pcaData, alist$SNP_Pruned.2.Q$ADMIX_bin)
     colnames(pcaData)[6] <- "%Holstein"
     pca <- ggplot(pcaData, aes(PC1, PC2, color=Condition, shape = `%Holstein`)) +
-    geom_point(size=3, alpha = 0.8) +
+    geom_point(size=4, alpha = 0.8) +
     scale_color_manual(values = c("#2166ac", "#b2182b")) +
+    scale_shape_manual(values = c(15,16,17,18,11,13)) +
     xlab(paste0("PC1: ",percentVar[1],"% variance")) +
     ylab(paste0("PC2: ",percentVar[2],"% variance")) + 
     coord_fixed() + theme_bw() +
@@ -338,7 +351,7 @@ result_normal$pca
 ggsave(args[7], width = 12, height = 12, dpi = 600)
 
 # DE results
-write.table(result_normal$signif_results, file = args[8] sep = "\t", row.names = T, col.names = T, quote = F)
+write.table(result_normal$signif_results, file = args[8], sep = "\t", row.names = T, col.names = T, quote = F)
 write.table(result_normal$all_results, file = args[9], sep = "\t", row.names = T, col.names = T, quote = F)
 
 gem <- result_normal$gprofiler_results[,c("query", "term_id", "query_size", "intersection_size", "term_name", "p_value", "intersection")]

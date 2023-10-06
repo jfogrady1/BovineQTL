@@ -38,7 +38,7 @@ filter(is_eGene == T) %>% select(1)
 INFECTED_eGene <- read.table(args[3], header = T) %>% 
 filter(is_eGene == T) %>% select(1)
 
-
+dim(ALL_eGene)
 ########################################################################################
 ########################################################################################
 ## 2. Number of genes with number of eQTLs
@@ -50,14 +50,34 @@ filter(is_eGene == T) %>% select(1)
 ALL <- read.table(gzfile(args[5]), sep = "\t", header = T)
 CONTROL <- read.table(gzfile(args[6]), sep = "\t", header = T)
 INFECTED <- read.table(gzfile(args[7]), sep = "\t", header = T)
+
+
 ALL <- inner_join(ALL, ALL_eGene)
 CONTROL <- inner_join(CONTROL, CONTROL_eGene)
 INFECTED <- inner_join(INFECTED, INFECTED_eGene)
 # Percentage increase in eQTL numbers
-all_increase <- ((nrow(ALL) - nrow(ALL_perm)) / nrow(ALL_perm)) * 100 # 77.98456
-control_increase <- ((nrow(CONTROL) - nrow(CONTROL_perm)) / nrow(CONTROL_perm)) * 100 # 20.90791
-infec_increase <- ((nrow(INFECTED) - nrow(INFECTED_perm)) / nrow(INFECTED_perm)) * 100 # 12.34222
+all_increase <- ((nrow(ALL) - nrow(ALL_perm)) / nrow(ALL_perm)) * 100 
+control_increase <- ((nrow(CONTROL) - nrow(CONTROL_perm)) / nrow(CONTROL_perm)) * 100 
+infec_increase <- ((nrow(INFECTED) - nrow(INFECTED_perm)) / nrow(INFECTED_perm)) * 100 
 
+ALL %>% filter(rank > 1) %>% dim()
+CONTROL %>% filter(rank > 1) %>% dim()
+INFECTED %>% filter(rank > 1) %>% dim()
+
+
+
+all_increase
+control_increase
+infec_increase
+
+# 78.83949
+# 22.94136
+# 5.631159
+
+
+mean(ALL$rank)
+mean(CONTROL$rank)
+mean(INFECTED$rank)
 
 # Now plot number per group
 ALL <- ALL[order(ALL$rank, decreasing = T),]
@@ -82,6 +102,7 @@ INFECTED_plot <- INFECTED %>% group_by(conditional) %>% summarize(Group = "INFEC
 conditional_plot <- rbind(ALL_plot, CONTROL_plot, INFECTED_plot)
 conditional_plot$conditional <- as.character(conditional_plot$conditional)
 conditional_plot$conditional <- factor(conditional_plot$conditional, levels = c("1","2","3","4","5","6","7","8","9","10","11"))
+
 
 
 # Main plot
@@ -161,7 +182,7 @@ CONTROL_distance_plot$start_distance <- CONTROL_distance_plot$start_distance / 1
 
 # INFECTED
 INFECTED_distance_perm <- INFECTED %>% filter(rank == 1) %>% select(start_distance) %>% abs()
-INFECTED_distance_conditional <- INFECTED %>% filter(rank > 1) %>% select(start_distance) %>% abs()
+INFECTED_distance_conditional <- INFECTED %>% filter(rank > 1) %>% select(start_distance) %>% abs() # filter for ranks >1 which is top cis-eQTL
 INFECTED_distance_perm$Category <- "Top"
 INFECTED_distance_conditional$Category <- "Conditional"
 INFECTED_distance_perm$Group <- "INFECTED"
@@ -172,7 +193,7 @@ INFECTED_distance_plot$start_distance <- INFECTED_distance_plot$start_distance /
 merged_distance_plot <- rbind(ALL_distance_plot, CONTROL_distance_plot, INFECTED_distance_plot)
 
 ggplot(merged_distance_plot, aes(y=Category, x=start_distance, fill=Group)) + 
-geom_density_ridges() +
+geom_density_ridges(scale = 0.8) +
   theme_bw() +
   labs(y = "Category of eQTL", x = "Distance to transcriptional start site (kb)") +
   theme_bw() +
@@ -189,22 +210,18 @@ ggsave(args[10], height = 12, width = 10, dpi = 600)
 
 
 # Actually test this to see if it is significantly different
-all_result <- wilcox.test(ALL_distance_perm$start_distance, ALL_distance_conditional$start_distance)
-infected_result <- wilcox.test(INFECTED_distance_perm$start_distance, INFECTED_distance_conditional$start_distance)
-control_result <- wilcox.test(CONTROL_distance_perm$start_distance, CONTROL_distance_conditional$start_distance)
+all_result <- wilcox.test(abs(ALL_distance_perm$start_distance), abs(ALL_distance_conditional$start_distance))
+infected_result <- wilcox.test(abs(INFECTED_distance_perm$start_distance), abs(INFECTED_distance_conditional$start_distance))
+control_result <- wilcox.test(abs(CONTROL_distance_perm$start_distance), abs(CONTROL_distance_conditional$start_distance))
 
 all_result$p.value
-infected_result$p.value
 control_result$p.value
+infected_result$p.value
 
 
-#> all_result$p.value
-#[1] 0
-#> infected_result$p.value
-#[1] 8.878246e-111
-#> control_result$p.value
-#[1] 2.798968e-276
-
+#0
+#4.00794e-75
+#9.773674e-20
 
 ########################################################################################
 ########################################################################################
@@ -258,15 +275,15 @@ ggsave(args[11], height = 12, width = 10, dpi = 600)
 
 # Actually test this to see if correlation signficiant
 
-cor(ALL_slope_distance[,1], ALL_slope_distance[,2])
+
 result_ALL <- cor.test(ALL_slope_distance[,1], abs(ALL_slope_distance[,2]), method = "spearman", exact = FALSE)
 result_CONTROL <- cor.test(CONTROL_slope_distance[,1], abs(CONTROL_slope_distance[,2]), method = "spearman", exact = FALSE)
 result_INFECTED <- cor.test(INFECTED_slope_distance[,1], abs(INFECTED_slope_distance[,2]), method = "spearman", exact = FALSE)
 
-result_ALL$p.value # 1.934035e-243
-result_CONTROL$p.value # 3.93357e-33
-result_INFECTED$p.value # 9.179214e-14
+result_ALL$p.value #5.781677e-235
+result_CONTROL$p.value # 1.646611e-38
+result_INFECTED$p.value # 1.734306e-09
 
-result_ALL$estimate # -0.2870814 --> rho
-result_CONTROL$estimate # -0.1743453
-result_INFECTED$estimate # -0.1311376
+result_ALL$estimate # -0.2938419  --> rho
+result_CONTROL$estimate # -0.2019752 --> rho 
+result_INFECTED$estimate # -0.1264643 -->rho

@@ -12,6 +12,22 @@ library(ggplot2)
 library(ggridges)
 args = commandArgs(trailingOnly = T)
 
+
+
+#args[1] =  "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/formatting/ALL_IMPUTED_UPDATED.vcf.gz"
+#args[2] = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/results/ALL.cis_qtl_fdr0.05.txt"
+#args[3] = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/results/ALL_trans_FDR_corrected.txt"
+#args[4] = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/inter_chrom_trans_cis_SNPs.txt"
+#args[5] = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/transQTL/inter_chrom_trans_cis_LD.ld"
+#args[6] = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/inter_chrom_trans_cis_SNPs_NULL.txt"
+#args[7] = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/transQTL/inter_chrom_trans_cis_LD_NULL.ld"
+#args[8] = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/transQTL/inter_trans_V_5_permuted.pdf"
+#args[9] = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/transQTL/inter_trans_cis_permutation_results.txt"
+#args[10] = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/transQTL/inter_trans_cis_permutation_raw.txt"
+#args[11] = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/results/ALL_interchromosomal_LD_corrected.txt"
+#args[12] = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/bin/software/circos/current/transqtl/data/inter_chrom_links.txt"
+
+
 vcf = args[1]
 cis = args[2]
 trans = args[3]
@@ -44,10 +60,11 @@ snps <- c(cis$variant_id, trans$V4)
 length(snps) # trans-eQTLs which are also cis-eQTLs
 
 write.table(snps, args[4], row.names = F, col.names = F, quote = F,sep = "\t")
+if (!file.exists(args[5])) {
 system(paste0("plink --cow --vcf /home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/formatting/ALL_IMPUTED_UPDATED.vcf.gz ",
               "--r2 inter-chr --ld-window-r2 0 --extract /home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/inter_chrom_trans_cis_SNPs.txt ",
               "--keep-allele-order --out /home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/transQTL/inter_chrom_trans_cis_LD"))
-
+}
 # Read in the data
 LD_data <- fread(args[5])
 LD_data$pair <- paste0(LD_data$SNP_A,"-", LD_data$SNP_B)
@@ -63,7 +80,7 @@ original_pairs$pairs <- paste0(original_pairs$cis, "-", original_pairs$trans)
 
 LD_data_pair1 <- LD_data %>% filter(pair %in% original_pairs$pairs) %>% select(7,8)
 LD_data_pair2 <- LD_data %>% filter(pair_reverse %in% original_pairs$pairs) %>% select(7,9)
-
+dim(cis)
 
 #Now join both by pair
 head(LD_data_pair2)
@@ -87,7 +104,8 @@ vcf_data$AF <- gsub("AF=", "", vcf_data$AF) %>% as.numeric()
 
 null_snps <- as.data.frame(matrix(ncol = 4, nrow = 0))
 colnames(null_snps) <- c("CHROM", "trans", "AF", "cis")
-for (i in 1:23) {
+dim(trans)
+for (i in 1:nrow(trans)) {
     set.seed(i)
     trans_temp <- trans[i,]
     cis_temp <- cis[i,] # need this to keep track of pairs
@@ -104,6 +122,7 @@ for (i in 1:23) {
 null_snps$pairs <- paste0(null_snps$ID, "-", null_snps$cis)
 null_snps_only <- null_snps$ID
 null_snps_only <- c(null_snps_only, cis$cis_id)
+
 # now we have SNPs which are null
 # compute the LD between these and the cis eQTL SNPs
 # Note, this file will be much larger
@@ -120,7 +139,7 @@ LD_null <- fread(args[7])
 LD_null$pairs <- paste0(LD_null$SNP_A, "-", LD_null$SNP_B)
 LD_null$pairs_reverse <- paste0(LD_null$SNP_B, "-", LD_null$SNP_A)
 LD_null <- LD_null %>% filter(LD_null$pairs %in% null_snps$pairs | LD_null$pairs_reverse %in% null_snps$pairs)
-
+dim(original_pairs)
 # calculate position of variants
 #LD_null$POS_trans <- paste0(LD_null$CHR1, ":", LD_null$POS1)
 #LD_null$POS_cis <- paste0(LD_null$CHR2, ":", LD_null$POS2)
@@ -138,6 +157,7 @@ colnames(final_stats) <- c("R2", "pairs","permutation")
 colnames(temp_stats) <- c("R2", "pairs", "permutation")
 # Now need to sample exactly the same number of variants
 for (i in 1:10000) {
+    print(i)
     temp_stats <- as.data.frame(matrix(ncol = 3, nrow = 0))
     colnames(temp_stats) <- c("R2", "pairs", "permutation")
     for(n in 1:length(cis$variant_id)) { # note this is the same order as trans
@@ -163,28 +183,33 @@ head(LD_null)
 final_stats$R <- sqrt(final_stats$R2)
 final_stats
 # Test
-stats_df_p <- data.frame(matrix(ncol=2, nrow=0))
-stats_temp <- data.frame(matrix(ncol=2, nrow=0))
-colnames(stats_df_p) <- c("p", "permutation")
-colnames(stats_temp) <- c("p", "permutation")
+stats_df_p <- data.frame(matrix(ncol=3, nrow=0))
+stats_temp <- data.frame(matrix(ncol=3, nrow=0))
+colnames(stats_df_p) <- c("p", "statistic","permutation")
+colnames(stats_temp) <- c("p", "statistic", "permutation")
 for (i in 1:10000) {
     # get permutation
     curr_round <- final_stats %>% filter(permutation == i)
-    result <- wilcox.test(original_pairs$R, curr_round$R, alternative = "greater", exact = F)
+    result <- wilcox.test(original_pairs$R, curr_round$R, alternative = "greater", paired = TRUE)
     stats_temp[1,1] <- result$p.value
-    stats_temp[1,2] <- i
+    stats_temp[1,2] <- result$statistic
+    stats_temp[1,3] <- i
     stats_df_p <- rbind(stats_df_p, stats_temp)
 }
+hist(stats_df_p$p)
+
 
 # correct for multiple testing
 stats_df_p$P_BH <- p.adjust(stats_df_p$p, method = "BH")
-stats_df_p$P_bonferroni <- p.adjust(stats_df_p$p, method = "bonferroni")
-
+max(stats_df_p$P_BH)
 # Plotting some distributions
-set.seed(500)
-num = sample(seq(1:10000), 5)
+set.seed(5000)
+num = sample(seq(1:10000), 10)
 data_plot <- final_stats %>% filter(final_stats$permutation %in% num)
-
+min_permute <- stats_df_p %>% filter(stats_df_p$P_BH == max(stats_df_p$P_BH)) %>% select(permutation) %>% as.vector()
+min_plot <- final_stats %>% filter(final_stats$permutation %in% min_permute)
+data_plot <- rbind(data_plot, min_plot)
+min_plot$Type <- "null"
 data_plot$Type = "null"
 data_plot$Type = "null"
 observed <- original_pairs %>% select(R2_final, pairs,R)
@@ -192,12 +217,15 @@ observed$permutation <- "observed"
 observed <- observed %>% select(1,2,4,3)
 colnames(observed)[1] <- "R2"
 observed$Type = "Observed"
+min_plot <- min_plot %>% select(4,5,3)
+head(min_plot)
+head(data_plot)
 data_plot <- data_plot %>% select(4,5,3)
 observed <- observed %>% select(4,5,3)
-data_plot <- rbind(data_plot, observed)
+data_plot <- rbind(data_plot, observed, min_plot)
 data_plot$permutation <- as.factor(data_plot$permutation)
 data_plot$Type <- as.factor(data_plot$Type)
-data_plot
+
 ggplot(data = data_plot, aes(y = permutation, x = R, fill = Type)) + 
 geom_density_ridges(scale = 1, jittered_points = TRUE, quantile_lines = T, alpha = 0.5) + theme_bw() +
   theme(axis.text.x = element_text(angle = 0, size = 15, colour = "black"),

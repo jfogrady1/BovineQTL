@@ -195,7 +195,7 @@ knownCovariatesFiltered<-PCAForQTL::filterKnownCovariates(knownCovariates,cov_ex
 
 PCsTop<-scale(cov_exp)
 
-cov_output = cbind(pca_vect, PCsTop, knownCovariatesFiltered)
+cov_output = cbind(PCsTop, knownCovariatesFiltered)
 cov_output = t(cov_output)
 head(cov_output)
 # output

@@ -38,3 +38,4 @@ eqtl$is_eGene = (eqtl$pval_nominal < nthresholds) & (eqtl$pval_adj <= fdr_thresh
 #Output
 fwrite(eqtl,file_output,sep="\t")
 cat("Done\n")
+

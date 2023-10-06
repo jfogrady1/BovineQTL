@@ -14,6 +14,20 @@ library(ggplot2)
 library(ggridges)
 args = commandArgs(trailingOnly = T)
 
+#args[1] =  "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/formatting/ALL_IMPUTED_UPDATED.vcf.gz"
+#args[2]  = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/results/ALL.cis_qtl_fdr0.05.txt"
+#args[3] = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/results/ALL_trans_FDR_corrected.txt"
+#args[4] = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/intra_chrom_trans_SNPs.txt"
+#args[5] = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/transQTL/trans_intra.ld.gz"
+#args[6] = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/transQTL/intra_transVar_LD_between_them.pdf"
+#args[7] = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/intra_observed_cis_trans_SNPs.txt"
+#args[8] = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/transQTL/trans_cis_intra_LD.geno.ld"
+#args[9] = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/intra_expected_cis_trans_SNPs.txt"
+#args[10] = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/transQTL/trans_cis_intra_LD_null.geno.ld"
+#args[11] = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/transQTL/intra_trans_V_15_permuted.pdf"
+#args[12] = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/transQTL/intra_trans_cis_permutation_results.txt"
+#args[13]= "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/transQTL/intra_trans_cis_permutation_raw.txt"
+#args[14] = "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/results/ALL_intrachromosomal_LD_corrected.txt"
 vcf <- args[1]
 vcf_data <- read.vcfR(vcf)
 
@@ -30,7 +44,7 @@ trans <- trans %>% filter(intra == TRUE)
 # Now have trans SNPs which are on same chromosome to associated gene
 length(unique(trans$V1))
 # 26 eGenes were associated on same chromosome as trans-eQTLs
-dim(trans)
+dim(trans) # 26 eGenes associated with 585 trans-evariants
 
 
 
@@ -56,12 +70,13 @@ LD_trans = LD_trans %>% select(3,6,7)
 intra_results = list()
 head(LD_trans)
 genes = unique(trans$V1)
+genes
 for (g in genes) {
     trans_gene = trans %>% filter(V1 == g) %>% left_join(., LD_trans, by = c("V4" = "SNP_A"))
     print(trans_gene)
     intra_results[[g]] <- trans_gene
 }
-
+intra_results
 # Generate a dummy plot to visualise this for the 26 genes
 plots_df = data.frame(matrix(ncol=2, nrow = 0))
 colnames(plots_df) = c("phenotype", "r")
@@ -78,7 +93,8 @@ for(ele in genes) {
     plots_df <- rbind(plots_df, test_df)
 }
 
-
+mean(plots_df$r)
+sd(plots_df$r)
 ggplot(data = plots_df, aes(x = phenotype, y = r, fill = phenotype)) + geom_boxplot() + coord_flip() +
   theme_bw() +
   labs(y = "Linkage disequilibrium (r) among trans-eVariants", x = "Intra-chromosomal trans-eGene") +
@@ -99,7 +115,7 @@ for (g in genes) {
     trans_gene <- trans_gene[!duplicated(trans_gene$V7),]
     final_intra_trans = rbind(final_intra_trans, trans_gene)
 }
-
+dim(final_intra_trans) # 26 trans-evariants associated with 26 trans-eGenes
 
 
 #################################################################################
@@ -115,11 +131,11 @@ length(unique(final_intra_trans$V1))
 # 25 cis-eGenes meaning one cis-eGene did not have any varaint in cis to be tested
 cis <- cis %>% filter(phenotype_id %in% genes)
 
-#23 cis-eGenes
+#24 cis-eGenes
 cis <- cis %>% filter(is_eGene == TRUE)
 ALL <- left_join(cis, final_intra_trans, by = c("phenotype_id" = "V1"))
 
-# Get position of cis-eGene
+# Get position of cis-eGene variant, the most significant one
 # First get variants
 cis_pos <- vcf_data@fix %>% as.data.frame() %>% select(3,2)
 colnames(cis_pos)[2] <- "cis_pos"
@@ -155,6 +171,9 @@ LD_trans$pairs_reverse <- paste0(LD_trans$trans_pos, "-", LD_trans$cis_pos)
 LD_trans <- LD_trans %>% filter(LD_trans$pairs %in% ALL$pairs | LD_trans$pairs_reverse %in% ALL$pairs)
 LD_trans$r <- sqrt(LD_trans$`R^2`) #  = absolute correlation
 
+
+
+sd(LD_trans$r)
 # Now have LD between trans-eQTLs and cis-eQTLs of same gene on same chromosome
 
 
@@ -176,11 +195,11 @@ set.seed(18794)
 # now sample a 10 million SNPs with replacement to get a rough number of SNPs
 vcf_master = vcf_data@fix %>% as.data.frame() %>% select(1,2,3)
 
-# Sample the SNPs
-vcf_1 = vcf_master[sample(nrow(vcf_master), 5e6, replace = T),]
-vcf_2 = vcf_master[sample(nrow(vcf_master), 5e6, replace = T),]
+# Sample the SNPs 500000
+vcf_1 = vcf_master[sample(nrow(vcf_master), 3e7, replace = T),]
+vcf_2 = vcf_master[sample(nrow(vcf_master), 3e7, replace = T),]
 
-
+dim(vcf_1)
 colnames(vcf_1) <- c("CHR1", "POS1", "VAR1")
 colnames(vcf_2) <- c("CHR2", "POS2", "VAR2")
 
@@ -199,19 +218,21 @@ merged <- merged %>% filter(CHR1 == CHR2)
 # filter for those which meet our criteria
 merged$distance = abs(as.numeric(merged$POS1) - as.numeric(merged$POS2))
 merged <- merged %>% filter(distance > min_distance & distance < max_distance)
-
+head(merged)
 dim(merged)
-# Now sample 20,000
-merged <- merged[sample(nrow(merged), 20000, replace = F),]
+
+# Now sample 50,000
+merged <- merged[sample(nrow(merged), 50000, replace = F),]
 
 expected <- c(merged$VAR1, merged$VAR2)
-
+head(expected)
 write.table(expected, args[9], row.names = F, col.names = F, quote = F, sep = "\t")
 
 if (!file.exists(args[10])) {
     system(paste0("vcftools --gzvcf /home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/formatting/ALL_IMPUTED_UPDATED.vcf.gz --snps /home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/intra_expected_cis_trans_SNPs.txt --geno-r2 --ld-window-bp ", max_distance," --ld-window-bp-min ",99999, " --out /home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/transQTL/trans_cis_intra_LD_null"))
 }
 
+# here have set of samples which are
 
 #############################################################
 # Permute LD and calculate difference to observed 50000 #####
@@ -226,24 +247,28 @@ data$distance <- abs(as.numeric(data$POS1) - as.numeric(data$POS2))
 data <- data %>% filter(distance > min_distance & distance < max_distance)
 data$r <- sqrt(as.numeric(data$`R^2`))
 
-# Now randmomly permute the median of 23 sets 50000 times
+data_s <- sample_n(data, 1000000)
+dim(data_s)
+# Now randmomly permute the median of 23 sets 100000 times
 stats_df <- data.frame(matrix(ncol=2, nrow=0))
 stats_temp <- data.frame(matrix(ncol=2, nrow=0))
 colnames(stats_df) <- c("r", "permutation")
 colnames(stats_temp) <- c("r", "permutation")
-for (i in 1:100000) {
+for (i in 1:10000) {
     set.seed(i)
-    data_temp <- data[sample(nrow(data), 23, replace = T),]
+    data_temp <- data_s[sample(nrow(data_s), 24, replace = T),]
     data_temp <- data_temp %>% select(r) 
     data_temp$permutation <- i
     stats_df <- rbind(stats_df, data_temp)
 
 }
 
+head(stats_df)
 # Now onto permutation, what proportion of tests are not significantly different under the null
 permutation_results = list()
 
-for(i in 1:100000) {
+for(i in 1:10000) {
+    print(i)
     curr_round <- stats_df %>% filter(permutation == i)
     result <- wilcox.test(LD_trans$r, curr_round$r, alternative = "greater", exact = F)
     permutation_results[i] <- result$p.value
@@ -253,8 +278,9 @@ stats_df_p <- data.frame(matrix(ncol=2, nrow=0))
 stats_temp <- data.frame(matrix(ncol=2, nrow=0))
 colnames(stats_df_p) <- c("p", "permutation")
 colnames(stats_temp) <- c("p", "permutation")
+head(stats_temp)
 
-for(i in 1:100000) {
+for(i in 1:10000) {
     stats_temp[1,] <- c(permutation_results[i], i)
     stats_df_p <- rbind(stats_df_p, stats_temp)
 
@@ -264,13 +290,15 @@ for(i in 1:100000) {
 #############################################################
 # Get statistics and perform multiple testing correction ####
 #############################################################
-
-stats_df_p$padj <- p.adjust(stats_df_p$p, method = "BH")
-stats_df_p$padj_bonferroni <- p.adjust(stats_df_p$p, method = "bonferroni")
+head(stats_df_p)
+stats_df_p$padj <- p.adjust(as.numeric(stats_df_p$p), method = "BH")
 
 # Plotting some distributions
-num = sample(seq(1:100000), 20)
+num = sample(seq(1:10000), 20)
 data_plot <- stats_df %>% filter(stats_df$permutation %in% num)
+min_permute <- stats_df_p %>% filter(stats_df_p$padj == max(stats_df_p$padj)) %>% select(permutation) %>% as.vector()
+min_plot <- stats_df %>% filter(stats_df$permutation %in% min_permute)
+data_plot <- rbind(data_plot, min_plot)
 
 data_plot$Type = "null"
 data_plot$Type = "null"
@@ -279,11 +307,11 @@ LD_plot$permutation <- "observed"
 LD_plot$Type = "observed"
 LD_plot <- rbind(data_plot, LD_plot)
 
-head(stats_df_p$padj_bonferroni)
-stats_df_p$signif = if_else(stats_df_p$padj_bonferroni < 0.05, TRUE, FALSE)
+
+stats_df_p$signif = if_else(stats_df_p$padj < 0.05, TRUE, FALSE)
 table(stats_df_p$signif)
 
-161/100000  # permuted p-value adjustement 0.00161
+0/100000  # permuted p-value adjustement 0.00161
 
 ggplot(data = LD_plot, aes(x = permutation, y = r, fill = Type)) + geom_boxplot() +
   theme_bw() + coord_flip() +
@@ -303,7 +331,7 @@ ggsave(args[11], width = 12, height = 12, dpi = 600)
 
 write.table(stats_df_p, file = args[12], row.names = F, col.names = T, quote = F, sep ="\t")
 write.table(stats_df, file = args[13], row.names = F, col.names = T, quote = F, sep ="\t")
-
+dim(stats_df)
 
 #############################################################
 # Filter for eGenes with top SNP not in LD with cis-eQTL ####
@@ -338,4 +366,5 @@ trans_filtered <- rbind(Final_inter_trans_genes_no_cis, trans)
 trans = fread(args[3], header = F) %>% filter(V10 < 0.05)
 trans <- trans %>% filter(trans$V1 %in% trans_filtered$V1)
 trans <- trans %>% filter(V10 < 0.01)
+
 write.table(trans, args[14], col.names = F, row.names = F, quote = F, sep = "\t")

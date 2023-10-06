@@ -19,10 +19,13 @@ args = commandArgs(trailingOnly = TRUE)
 #We then determined the percentage of those significant SNP-gene pairs had the same allelic direction of effect compared to the discovery cohort. 
 
 # Note, significant in both so will need the two files, permutation (gene level significance and nominal p value)
-
-
+#args[1] <- "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/results/ALL.cis_qtl_fdr0.05.txt"
+#args[2] <- "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/results/CONTROL.cis_qtl_fdr0.05.txt"
+#args[3] <-  "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/results/EQTL/results/INFECTED.cis_qtl_fdr0.05.txt"
+#args[4] <- "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/data/EQTL/Blood.nominals.2rd.txt"
+#args[5] <- "/home/workspace/jogrady/eqtl_study/eqtl_nextflow/data/EQTL/Gtex_thresholds_determined.txt"
 # Read in the data
-# select top snp which were significant genome wide
+# select top snp which were significant genome wide - note we are comparing the top eQTL in our dataset 
 ALL <- read.table(args[1], header = T) %>% 
 filter(is_eGene == T) #%>% select(7, 1,13)
 CONTROL <- read.table(args[2], header = T) %>% 
@@ -35,7 +38,7 @@ CONTROL$association <- paste0(CONTROL$variant_id, "-", CONTROL$phenotype_id)
 INFECTED$association <- paste0(INFECTED$variant_id, "-", INFECTED$phenotype_id)
 
 Cattle_gtex <- read.table(args[4], sep = " ", header =F)
-Cattle_gtex_permute <- read.table(args[5], sep = "\t", header =T)
+Cattle_gtex_permute <- read.table(args[5], sep = "\t", header =T) # Note this file, we can determine signifant eQTLS which are < p-value nominal threshold (see methods)
 Cattle_gtex_permute <- Cattle_gtex_permute %>% select(phenotype_id, pval_nominal_threshold)
 
 # Modify the dataframe
@@ -154,9 +157,17 @@ gtex_CONTROL <- gtex_CONTROL[order(gtex_CONTROL$pval_nominal, decreasing = F),]
 gtex_INFECTED <- gtex_INFECTED[order(gtex_INFECTED$pval_nominal, decreasing = F),]
 
 
+pi1_ALL <- 1 - pi0est(as.numeric(gtex_ALL$pval_nominal))$pi0
+pi1_CONTROL <- 1- pi0est(as.numeric(gtex_CONTROL$pval_nominal))$pi0
+pi1_INFECTED <- 1- pi0est(as.numeric(gtex_INFECTED$pval_nominal))$pi0
 
+pi1_ALL #0.6138685
+pi1_CONTROL #  0.6688508
+pi1_INFECTED # 0.7981247
 
-
+dim(gtex_ALL) #  4362 
+dim(gtex_CONTROL) # 2160
+dim(gtex_INFECTED) #  1497
 # Number of bootstrap iterations
 num_bootstraps <- 100
 
@@ -167,8 +178,9 @@ lambda_values <- seq(0.05,0.95,0.05)
 # Bootstrap loop
 for (i in 1:num_bootstraps) {
   # Sample with replacement from the p-values
-  bootstrap_sample <- sample(gtex_ALL$pval_nominal, replace = TRUE)
-  
+  sample_ps <- gtex_ALL$pval_nominal
+  bootstrap_sample <- sample(sample_ps, replace = TRUE)
+  bootstrap_sample <- sort(bootstrap_sample, decreasing = F)
   # Estimate π0 for the bootstrap sample
   bootstrap_pi0 <- pi0est(bootstrap_sample, lambda = lambda_values)
   
@@ -183,7 +195,9 @@ for (i in 1:num_bootstraps) {
 bootstrap_CONTROL_estimates <- matrix(0, nrow = num_bootstraps, ncol = 1)
 for (i in 1:num_bootstraps) {
   # Sample with replacement from the p-values
-  bootstrap_sample <- sample(gtex_CONTROL$pval_nominal, replace = TRUE)
+  sample_ps <- gtex_CONTROL$pval_nominal
+  bootstrap_sample <- sample(sample_ps, replace = TRUE)
+  bootstrap_sample <- sort(bootstrap_sample, decreasing = F)
   
   # Estimate π0 for the bootstrap sample
   bootstrap_pi0 <- pi0est(bootstrap_sample, lambda = lambda_values)
@@ -200,7 +214,9 @@ for (i in 1:num_bootstraps) {
 bootstrap_INFECTED_estimates <- matrix(0, nrow = num_bootstraps, ncol = 1)
 for (i in 1:num_bootstraps) {
   # Sample with replacement from the p-values
-  bootstrap_sample <- sample(gtex_INFECTED$pval_nominal, replace = TRUE)
+  sample_ps <- gtex_INFECTED$pval_nominal
+  bootstrap_sample <- sample(sample_ps, replace = TRUE)
+  bootstrap_sample <- sort(bootstrap_sample, decreasing = F)
   
   # Estimate π0 for the bootstrap sample
   bootstrap_pi0 <- pi0est(bootstrap_sample, lambda = lambda_values)
@@ -225,14 +241,17 @@ bootstrap_INFECTED_estimates <- bootstrap_INFECTED_estimates %>% as.data.frame()
 # ALL
 mean_values_ALL <- colMeans(bootstrap_ALL_estimates)
 sd_values_ALL <- apply(bootstrap_ALL_estimates, 2, sd)
+sem_ALL <- sd_values_ALL / sqrt(length(gtex_ALL$pval_nominal))
 mean_values_ALL # 0.6247269
+sem_ALL
 sd_values_ALL #0.02478944
 
 summary_data_ALL <- data.frame(
   Group = c('Gtex'),
   Category = c("ALL"),
   Mean = mean_values_ALL,
-  SD = sd_values_ALL
+  SD = sd_values_ALL,
+  SEM = sem_ALL
 )
 head(summary_data_ALL)
 
@@ -241,18 +260,21 @@ print("Summary Statistics Pioest")
 mean_values_CONTROL <- colMeans(bootstrap_CONTROL_estimates)
 sd_values_CONTROL <- apply(bootstrap_CONTROL_estimates, 2, sd)
 mean_values_CONTROL #0.6355099 
+sem_CONTROL <- sd_values_CONTROL / sqrt(length(gtex_CONTROL$pval_nominal))
 sd_values_CONTROL # Gtex_CONTROL - 0.03327106 
 
 summary_data_CONTROL <- data.frame(
   Group = c('Gtex'),
   Category = c("CONTROL"),
   Mean = mean_values_CONTROL,
-  SD = sd_values_CONTROL
+  SD = sd_values_CONTROL,
+  SEM = sem_CONTROL
 )
 
 # INFECTED
 mean_values_INFECTED <- colMeans(bootstrap_INFECTED_estimates)
 sd_values_INFECTED <- apply(bootstrap_INFECTED_estimates, 2, sd)
+sem_INFECTED <- sd_values_INFECTED / sqrt(length(gtex_INFECTED$pval_nominal))
 mean_values_INFECTED # 0.7858296
 sd_values_INFECTED  # 0.02731303
 
@@ -260,9 +282,13 @@ summary_data_INFECTED <- data.frame(
   Group = c('Gtex'),
   Category = c("INFECTED"),
   Mean = mean_values_INFECTED,
-  SD = sd_values_INFECTED
+  SD = sd_values_INFECTED,
+  SEM = sem_INFECTED
 )
 
+head(summary_data_ALL)
+head(summary_data_CONTROL)
+head(summary_data_INFECTED)
 summary_data <- rbind(summary_data_ALL, summary_data_CONTROL, summary_data_INFECTED)
 
 
